@@ -1,0 +1,194 @@
+---
+title: "Project 1: Exploring Key Predictors of U.S. Health-Insurance Charges with Linear Regression"
+author: "Muhammad Rafey Omer"
+date: "09/28/2025"
+output:
+  pdf_document: default
+fontsize: 11pt
+geometry: margin=1in
+---
+
+# **Problem Statement:** What Drives Health-Insurance Costs?
+
+# Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r libraries}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(stringr)
+library(tidyr)
+library(knitr)
+```
+
+# Data and Problem
+
+**Dataset:** The dataset contains **1,338 health-insurance records**, each describing a single policyholder with
+demographics (`age`, `sex`, `region`), health indicators (`bmi`, `smoker`), family details (`children`),
+and the **annual medical charges** billed to the insurer (`charges`).
+  
+**Goal:** The aim of this analysis is to determine which personal and lifestyle characteristics have the greatest influence on medical insurance expenses, and to construct a simple regression model capable of predicting annual charges.
+
+# Import & Initial Checks
+
+```{r import}
+insurance <- read_csv("insurance.csv", show_col_types = FALSE)
+glimpse(insurance)
+
+# Missing values check
+miss_summary <- sapply(insurance, function(x) sum(is.na(x)))
+kable(data.frame(variable = names(miss_summary), n_missing = as.integer(miss_summary)),
+      caption = "Missing values by column")
+```
+
+# Wrangling
+
+```{r wrangle}
+insurance <- insurance %>%
+  mutate(
+    sex    = as.factor(sex),
+    smoker = as.factor(smoker),
+    region = as.factor(region)
+  )
+
+summary(insurance)
+```
+
+# Exploratory Data Analysis
+
+## Numeric summaries
+
+```{r numeric}
+num_cols <- c("age", "bmi", "children", "charges")
+summ_tbl <- insurance %>%
+  select(all_of(num_cols)) %>%
+  summarise(across(everything(), list(min = min, q1 = ~quantile(.x, 0.25), median = median,
+                                      mean = mean, q3 = ~quantile(.x, 0.75), max = max)))
+summ_tidy <- summ_tbl %>%
+  pivot_longer(everything(),
+               names_to = c("variable", ".value"),
+               names_sep = "_") %>%
+  arrange(variable)
+
+kable(summ_tidy, caption = "Summary statistics for numeric columns")
+```
+
+## Distributions
+
+```{r hist-charges, fig.width=7, fig.height=4}
+ggplot(insurance, aes(charges)) +
+  geom_histogram(bins = 30) +
+  labs(title = "Distribution of Insurance Charges", x = "charges($)", y = "count")
+```
+
+```{r hist-bmi, fig.width=7, fig.height=4}
+ggplot(insurance, aes(bmi)) +
+  geom_histogram(bins = 30) +
+  labs(title = "BMI Distribution", x = "bmi", y = "count")
+```
+
+## Charges by categories
+
+```{r box-smoker, fig.width=7, fig.height=4}
+ggplot(insurance, aes(smoker, charges)) +
+  geom_boxplot() +
+  labs(title = "Charges by Smoker Status", x = "smoker", y = "charges($)")
+```
+
+```{r box-sex, fig.width=7, fig.height=4}
+ggplot(insurance, aes(sex, charges)) +
+  geom_boxplot() +
+  labs(title = "Charges by Sex", x = "sex", y = "charges($)")
+```
+
+```{r box-region, fig.width=7, fig.height=4}
+ggplot(insurance, aes(region, charges)) +
+  geom_boxplot() +
+  labs(title = "Charges by Region", x = "region", y = "charges($)")
+```
+
+## Relationships with age and BMI
+
+```{r scat-age, fig.width=7, fig.height=4}
+ggplot(insurance, aes(age, charges, color = smoker)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Charges vs Age (colored by Smoker)", x = "age", y = "charges($)")
+```
+
+```{r scat-bmi, fig.width=7, fig.height=4}
+ggplot(insurance, aes(bmi, charges, color = smoker)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Charges vs BMI (colored by Smoker)", x = "bmi", y = "charges($)")
+```
+
+# Modeling
+
+We fit a **multiple linear regression** to explain `charges` as a function of demographics and habits.
+We include a simple interaction to let smoking modify the BMI effect.
+
+```{r split}
+set.seed(42)
+
+n <- nrow(insurance)
+idx <- sample.int(n, size = floor(0.8 * n))  # 80/20 split
+train <- insurance[idx, ]
+test  <- insurance[-idx, ]
+```
+
+```{r fit}
+fit <- lm(charges ~ age + bmi + children + sex + smoker + region + bmi:smoker, data = train)
+summary(fit)
+```
+## Model diagnostics (base plots)
+
+```{r diag1, fig.width=7, fig.height=4}
+plot(fit, which = 1)
+```
+
+```{r diag2, fig.width=7, fig.height=4}
+plot(fit, which = 2)
+```
+
+```{r diag3, fig.width=7, fig.height=4}
+plot(fit, which = 3)
+```
+
+## Test-set performance (manual RMSE and R^2)
+
+```{r metrics}
+test$pred <- predict(fit, newdata = test)
+
+rmse <- sqrt(mean((test$pred - test$charges)^2))
+
+sse <- sum((test$charges - test$pred)^2)
+sst <- sum((test$charges - mean(test$charges))^2)
+rsq <- 1 - sse/sst
+
+perf <- data.frame(
+  .metric = c("rmse", "rsq"),
+  .estimate = c(rmse, rsq)
+)
+
+kable(perf, digits = 4, caption = "Test-set performance (manual calculation)")
+```
+
+```{r plot-pred, fig.width=7, fig.height=4}
+ggplot(test, aes(charges, pred)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(title = "Observed vs Predicted Charges (Test Set)",
+       x = "Observed charges", y = "Predicted charges")
+```
+
+# Findings
+The analysis indicates that **smoking status is the strongest driver of medical insurance charges**, showing a substantial positive association with costs. **Body mass index (BMI) and age** also exhibit positive relationships with charges, and an interaction between smoking and BMI suggests that the impact of smoking may vary depending on BMI levels. For modeling purposes, it is advisable to **log-transform the `charges` variable** if diagnostic plots reveal heteroscedastic residuals, as this transformation can help stabilize variance and improve model fit.
+
+# Conclusion
+In conclusion, both demographic characteristics and lifestyle choices are key contributors to medical insurance costs. Among these, smoking stands out as the most influential factor, showing a strong positive association with higher charges. Age and body mass index (BMI) also play important roles, with older individuals and those with higher BMI generally incurring greater expenses. Together, these findings highlight the significant impact of personal health behaviors and demographic profiles on insurance charges.
+
