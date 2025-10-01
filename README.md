@@ -37,22 +37,6 @@ The main objective is to identify which variables most strongly influence insura
 - **Children** have a smaller positive effect, while sex and region effects are minor.
 - The model explains ~82% of the variance in charges.
 
-## Files Submitted
-- `insurance_project.Rmd` – Main R Markdown analysis file
-- `Project 1.pdf` – Knitted PDF report
-- `insurance.csv` – Dataset file
-- `README.md` – This project overview file
-- `Project1_Presentation.mp4` – Video presentation (to be recorded)
-
-## How to Reproduce
-1. Place `insurance_project.Rmd` and `insurance.csv` in the same directory.
-2. Open the `.Rmd` file in **RStudio**.
-3. Install required R libraries if not already installed:  
-   ```r
-   install.packages(c("dplyr", "ggplot2", "readr", "stringr", "tidyr", "knitr"))
-   ```
-4. Knit the R Markdown file to produce the PDF report.
-
 ## Conclusion
 Demographics and lifestyle factors, particularly **smoking** and **BMI**, play a major role in driving medical insurance costs. 
 This project demonstrates how linear regression can provide interpretable insights and reasonably accurate predictions for insurance charges.
